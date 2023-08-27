@@ -20,14 +20,14 @@ class BasicBlock(nn.Module):
         self.residual = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, stride=stride, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
 
             nn.Conv2d(out_channels, out_channels * self.expansion, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels * self.expansion)
         )
 
     def forward(self, x):
-        return nn.ReLU(inplace=True)(
+        return nn.ReLU()(
             self.residual(x) + self.shortcut(x)
         )
 
@@ -51,18 +51,18 @@ class BottleNeck(nn.Module):
 
             nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
 
             nn.Conv2d(out_channels, out_channels, stride=stride, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
 
             nn.Conv2d(out_channels, out_channels * self.expansion, kernel_size=1, bias=False),
             nn.BatchNorm2d(out_channels * self.expansion)
         )
 
     def forward(self, x):
-        return nn.ReLU(inplace=True)(
+        return nn.ReLU()(
             self.residual(x) + self.shortcut(x)
         )
 
@@ -73,9 +73,10 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
 
         self.pool1 = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=7, padding=3, stride=2, bias=False),
+            # nn.Conv2d(3, 64, kernel_size=7, padding=3, stride=2, bias=False),
+            nn.Conv2d(3, 64, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
+            nn.ReLU(),
             # nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         )
 
@@ -83,7 +84,6 @@ class ResNet(nn.Module):
         self.pool3 = self._make_layer(block, 128, block_num[1], 2)
         self.pool4 = self._make_layer(block, 256, block_num[2], 2)
         self.pool5 = self._make_layer(block, 512, block_num[3], 2)
-        self.avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(block.expansion * 512, class_num)
 
     def _make_layer(self, block, out_channels, block_num, stride):
@@ -101,7 +101,7 @@ class ResNet(nn.Module):
         x = self.pool3(x)
         x = self.pool4(x)
         x = self.pool5(x)
-        x = self.avg_pool(x)
+        x = nn.functional.avg_pool2d(x, 4)
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x

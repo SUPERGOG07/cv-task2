@@ -2,41 +2,37 @@ import time
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
 import torchvision
+from torch.utils.data import DataLoader
 from torchvision import transforms
 
 import resnet
 
-epochs = 50
-batch_size_train = 64
-batch_size_test = 1000
+epochs = 100
+batch_size_train = 128
+batch_size_test = 100
 learning_rate = 1e-3
 momentum = 0.9
+weight_decay = 1e-3
+mean = [0.5070746, 0.48654896, 0.44091788]
+std = [0.26733422, 0.25643846, 0.27615058]
 
-# transform = transforms.Compose([
-#     transforms.Resize(256),
-#     transforms.CenterCrop(224),
-#     # transforms.RandomHorizontalFlip(),
-#     transforms.ToTensor(),
-#     # transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
-#     transforms.Normalize(mean=[0.485, 0.456, 0.406],
-#                          std=[0.229, 0.224, 0.225])
-# ])
+train_transform = transforms.Compose([
 
-# transform = transforms.Compose([
-#     transforms.RandomHorizontalFlip(),
-#     transforms.ToTensor(),
-#     transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])
-# ])
-
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor()
+    transforms.RandomCrop(32, padding=4),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomRotation(45),
+    transforms.ToTensor(),
+    transforms.Normalize(mean, std)
 ])
 
-train_dataset = torchvision.datasets.CIFAR100('./data/cifar100/', train=True, download=True, transform=transform)
-test_dataset = torchvision.datasets.CIFAR100('./data/cifar100/', train=False, download=True, transform=transform)
+test_transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(mean, std)
+])
+
+train_dataset = torchvision.datasets.CIFAR100('./data/cifar100/', train=True, download=True, transform=train_transform)
+test_dataset = torchvision.datasets.CIFAR100('./data/cifar100/', train=False, download=True, transform=test_transform)
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size_train, shuffle=True)
 test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size_test, shuffle=True)
 
@@ -48,13 +44,15 @@ network = resnet.resnet18().to(device)
 
 print(network)
 
-# 损失函数和优化器
+# 损失函数
 loss_func = nn.CrossEntropyLoss().to(device)
-optimizer = torch.optim.SGD(network.parameters(), lr=learning_rate, momentum=momentum)
+# 优化器
+optimizer = torch.optim.SGD(network.parameters(), lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
+# 学习率调度
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 
 def train(epoch):
-    start_time = time.time()
     print('Training start')
     network.train()
     correct = 0
@@ -72,7 +70,7 @@ def train(epoch):
 
         _, predicted = torch.max(outputs.data, 1)
         total += labels.size(0)
-        correct += (predicted == labels).sum().item()
+        correct += predicted.eq(labels).sum()
 
         if i % 200 == 199:
             print('[%d, %5d] loss: %.3f accuracy: %.2f %%' % (epoch, i + 1, loss.item(), 100 * correct / total))
@@ -80,9 +78,6 @@ def train(epoch):
             # torch.save(optimizer.state_dict(), './network/optimizer.pth')
 
     print('Training completed.')
-    end_time = time.time()
-    run_time = end_time - start_time
-    print('time used: %.2f minutes' % (run_time / 60))
 
 
 def test():
@@ -97,7 +92,7 @@ def test():
             outputs = network(images)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
-            correct += (predicted == labels).sum().item()
+            correct += predicted.eq(labels).sum()
 
     print('Testing completed.')
     print('Accuracy on test set: %.2f %%' % (100 * correct / total))
@@ -105,7 +100,12 @@ def test():
 
 if __name__ == '__main__':
     for epoch in range(1, epochs + 1):
+        start_time = time.time()
+
         print('=' * 30)
         train(epoch)
         test()
-        print('=' * 30)
+
+        end_time = time.time()
+        run_time = end_time - start_time
+        print('time used: %.2f minutes' % (run_time / 60))
